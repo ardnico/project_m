@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package fxbot;
+
+message TradeSignal {
+  string signal_id = 1;
+  string ts = 2;
+  string strategy_id = 3;
+  string symbol = 4;
+  string side = 5;
+  double size = 6;
+  string order_type = 7;
+  double limit_price = 8;
+  double slippage_tolerance = 9;
+}

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fxbot"
+version = "0.1.0"
+description = "FX automated trading system components"
+requires-python = ">=3.10"
+authors = [
+  {name = "Project Team"}
+]
+dependencies = [
+  "asyncio-nats-client>=0.13.3",
+  "pydantic>=2.5.0",
+  "protobuf>=4.24.0",
+  "pyyaml>=6.0.1",
+  "structlog>=23.1.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
