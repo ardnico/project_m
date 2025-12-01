@@ -1,0 +1,9 @@
+# Example configuration for IG price poller
+api_key: YOUR_API_KEY
+username: YOUR_USERNAME
+password: YOUR_PASSWORD
+epics:
+  - CS.D.EURUSD.MINI.IP
+polling_interval_seconds: 2
+db_path: data/trading.db
+log_level: INFO
