@@ -1,40 +1,46 @@
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import yaml
 from dotenv import load_dotenv
-from pydantic import BaseSettings, Field, ValidationError
-
-
-class Settings(BaseSettings):
-    ig_base_url: str = Field(
-        default="https://demo-api.ig.com/gateway/deal",
-        description="Base URL for IG REST API (demo environment by default).",
-    )
-    api_key: str = Field(description="IG API key for the target account.")
-    username: str = Field(description="IG account username.")
-    password: str = Field(description="IG account password.")
-    epics: list[str] = Field(
-        default_factory=list,
-        description="List of market epic identifiers to poll.",
-    )
-    polling_interval_seconds: int = Field(
-        default=2, description="Seconds to wait between price polls."
-    )
-    db_path: str = Field(default="data/trading.db", description="SQLite database path.")
-    log_level: str = Field(default="INFO", description="Logging level (e.g., INFO, DEBUG).")
-
-    model_config = {
-        "env_prefix": "IG_",
-        "env_file": ".env",
-        "case_sensitive": False,
-    }
+import yaml
 
 
 class SettingsLoadError(Exception):
     """Raised when configuration cannot be loaded or validated."""
+
+
+@dataclass
+class Settings:
+    ig_base_url: str = "https://demo-api.ig.com/gateway/deal"
+    api_key: str = ""
+    username: str = ""
+    password: str = ""
+    epics: list[str] = field(default_factory=list)
+    polling_interval_seconds: int = 2
+    db_path: str = "data/trading.db"
+    log_level: str = "INFO"
+
+    def __post_init__(self) -> None:
+        missing = [name for name in ["api_key", "username", "password"] if not getattr(self, name)]
+        if missing:
+            raise SettingsLoadError(f"Missing required settings: {', '.join(missing)}")
+        if not isinstance(self.epics, list):
+            raise SettingsLoadError("epics must be a list of strings")
+
+
+def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
+    if "polling_interval_seconds" in data:
+        try:
+            data["polling_interval_seconds"] = int(data["polling_interval_seconds"])
+        except (TypeError, ValueError):
+            raise SettingsLoadError("polling_interval_seconds must be an integer")
+    if "epics" in data and isinstance(data["epics"], str):
+        data["epics"] = [data["epics"]]
+    return data
 
 
 def _read_config_file(config_path: Path) -> Dict[str, Any]:
@@ -42,13 +48,13 @@ def _read_config_file(config_path: Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     suffix = config_path.suffix.lower()
-    with config_path.open("r", encoding="utf-8") as file:
-        if suffix in {".yaml", ".yml"}:
-            return yaml.safe_load(file) or {}
-        if suffix == ".toml":
-            import tomllib  # Python 3.11+
+    text = config_path.read_text(encoding="utf-8")
+    if suffix in {".yaml", ".yml"}:
+        return yaml.safe_load(text) or {}
+    if suffix == ".toml":
+        import tomllib  # Python 3.11+
 
-            return tomllib.load(file)
+        return tomllib.loads(text)
     raise ValueError(f"Unsupported config file format: {config_path.suffix}")
 
 
@@ -65,9 +71,21 @@ def load_settings(config_path: Optional[str] = None) -> Settings:
         file_path = Path(config_path)
         data = _read_config_file(file_path)
 
+    env_overrides = {
+        "api_key": os.getenv("IG_API_KEY"),
+        "username": os.getenv("IG_USERNAME"),
+        "password": os.getenv("IG_PASSWORD"),
+        "ig_base_url": os.getenv("IG_BASE_URL"),
+        "polling_interval_seconds": os.getenv("IG_POLLING_INTERVAL_SECONDS"),
+        "db_path": os.getenv("IG_DB_PATH"),
+        "log_level": os.getenv("IG_LOG_LEVEL"),
+    }
+    merged = {**data, **{k: v for k, v in env_overrides.items() if v is not None}}
+    merged = _coerce_types(merged)
+
     try:
-        return Settings(**data)
-    except ValidationError as exc:
+        return Settings(**merged)
+    except TypeError as exc:
         raise SettingsLoadError(str(exc)) from exc
 
 
