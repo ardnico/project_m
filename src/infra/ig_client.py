@@ -6,8 +6,6 @@ from datetime import datetime
 from typing import Dict, Optional
 
 import requests
-from requests import Response
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 @dataclass
@@ -44,15 +42,14 @@ class IGClient:
     def close(self) -> None:
         self.session.close()
 
-    def _handle_response(self, response: Response) -> Dict:
+    def _handle_response(self, response: requests.Response) -> Dict:
         if response.status_code in {401, 403}:
             raise AuthenticationError(f"Authentication failed with status {response.status_code}")
         if response.status_code >= 500:
             raise TransientAPIError(f"Server error {response.status_code}")
         response.raise_for_status()
-        return response.json()
+        return response.json() or {}
 
-    @retry(wait=wait_exponential(multiplier=0.5, min=0.5, max=8), stop=stop_after_attempt(3))
     def login(self) -> Dict[str, str]:
         url = f"{self.base_url}/session"
         headers = {
@@ -82,7 +79,6 @@ class IGClient:
             "Accept": "application/json",
         }
 
-    @retry(wait=wait_exponential(multiplier=0.5, min=0.5, max=8), stop=stop_after_attempt(3))
     def fetch_price(self, epic: str) -> PriceSnapshot:
         url = f"{self.base_url}/prices/{epic}"
         params = {"fields": "BID,ASK", "resolution": "SECOND", "max": 1}
