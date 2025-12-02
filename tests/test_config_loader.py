@@ -34,3 +34,19 @@ def test_load_settings_missing_required(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.delenv("IG_API_KEY", raising=False)
     with pytest.raises(Exception):
         load_settings()
+
+
+def test_load_settings_allows_demo_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "demo.yaml"
+    config_path.write_text("epics: [EPIC1]\ndemo_mode: true\ndemo_starting_balance: 5000", encoding="utf-8")
+    settings = load_settings(str(config_path))
+    assert settings.demo_mode is True
+    assert settings.demo_starting_balance == 5000.0
+    assert settings.api_key == ""
+
+
+def test_load_settings_cli_override_enables_demo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "demo.yaml"
+    config_path.write_text("epics: [EPIC1]", encoding="utf-8")
+    settings = load_settings(str(config_path), cli_overrides={"demo_mode": True})
+    assert settings.demo_mode is True

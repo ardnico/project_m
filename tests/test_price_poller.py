@@ -7,6 +7,7 @@ from typing import Iterator
 
 from src.app.price_poller import PricePoller
 from src.infra.db import init_db
+from src.infra.demo_client import DemoIGClient
 from src.infra.ig_client import PriceSnapshot
 
 
@@ -45,3 +46,19 @@ def test_price_poller_persists_snapshot(tmp_path) -> None:
     rows = list(conn.execute("SELECT epic, bid, ask, mid, timestamp FROM prices"))
     assert len(rows) == 1
     assert rows[0][0] == "EPIC1"
+
+
+def test_price_poller_with_demo_client(tmp_path) -> None:
+    db_path = tmp_path / "prices.db"
+    conn = init_db(str(db_path))
+    client = DemoIGClient(epics=["EPIC1"], seed=0)
+    poller = PricePoller(client, ["EPIC1"], 0, conn, logger=None)
+    poller.run(iterations=1)
+
+    rows = list(conn.execute("SELECT epic, bid, ask, mid, timestamp FROM prices"))
+    assert len(rows) == 1
+    epic, bid, ask, mid, timestamp = rows[0]
+    assert epic == "EPIC1"
+    assert bid < ask
+    assert mid > 0
+    assert timestamp

@@ -21,11 +21,14 @@ polling_interval_seconds: 2
 ig_base_url: "https://demo-api.ig.com/gateway/deal"
 db_path: "data/trading.db"
 log_level: "INFO"
+demo_mode: false
+demo_starting_balance: 100000
 ```
 
 Supported environment overrides:
 - `IG_API_KEY`, `IG_USERNAME`, `IG_PASSWORD`
 - `IG_BASE_URL`, `IG_POLLING_INTERVAL_SECONDS`, `IG_DB_PATH`, `IG_LOG_LEVEL`
+- `IG_DEMO_MODE`, `IG_DEMO_STARTING_BALANCE`, `IG_DEMO_PRICE_SEED`
 
 ## Running
 1. Install dependencies (Python 3.11+):
@@ -37,7 +40,11 @@ Supported environment overrides:
    ```bash
    python -m src.main --config config.yaml
    ```
-4. For a single login + fetch without looping, use dry run:
+4. To run offline with synthetic prices and a fictional balance, enable demo mode:
+   ```bash
+   python -m src.main --config config.yaml --demo
+   ```
+5. For a single login + fetch without looping, use dry run:
    ```bash
    python -m src.main --config config.yaml --dry-run
    ```

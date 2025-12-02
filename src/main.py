@@ -9,6 +9,7 @@ from src.app.price_poller import PricePoller
 from src.config.loader import SettingsLoadError, load_settings
 from src.infra.db import init_db, store_session
 from src.infra.ig_client import IGClient
+from src.infra.demo_client import DemoIGClient
 
 
 def configure_logging(level: str) -> None:
@@ -22,6 +23,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="IG price poller")
     parser.add_argument("--config", help="Path to YAML/TOML config file", required=False)
     parser.add_argument("--dry-run", action="store_true", help="Run one login + price fetch and exit")
+    parser.add_argument("--demo", action="store_true", help="Force demo mode with synthetic prices and virtual balance")
     return parser.parse_args(argv)
 
 
@@ -29,7 +31,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
 
     try:
-        settings = load_settings(args.config)
+        settings = load_settings(args.config, cli_overrides={"demo_mode": args.demo})
     except SettingsLoadError as exc:
         print(f"Failed to load settings: {exc}", file=sys.stderr)
         return 1
@@ -38,13 +40,26 @@ def main(argv: Optional[list[str]] = None) -> int:
     logger = logging.getLogger("ig-poller")
 
     db_conn = init_db(settings.db_path)
-    client = IGClient(
-        base_url=settings.ig_base_url,
-        api_key=settings.api_key,
-        username=settings.username,
-        password=settings.password,
-        logger=logging.getLogger("ig-client"),
-    )
+    if settings.demo_mode:
+        client = DemoIGClient(
+            epics=settings.epics,
+            starting_balance=settings.demo_starting_balance,
+            seed=settings.demo_price_seed,
+            logger=logging.getLogger("demo-client"),
+        )
+        logger.info(
+            "Running in demo mode with virtual balance %.2f (seed=%s)",
+            settings.demo_starting_balance,
+            settings.demo_price_seed,
+        )
+    else:
+        client = IGClient(
+            base_url=settings.ig_base_url,
+            api_key=settings.api_key,
+            username=settings.username,
+            password=settings.password,
+            logger=logging.getLogger("ig-client"),
+        )
 
     try:
         tokens = client.login()
