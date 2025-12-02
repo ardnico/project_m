@@ -23,21 +23,40 @@ class Settings:
     polling_interval_seconds: int = 2
     db_path: str = "data/trading.db"
     log_level: str = "INFO"
+    demo_mode: bool = False
+    demo_starting_balance: float = 100_000.0
+    demo_price_seed: Optional[int] = None
 
     def __post_init__(self) -> None:
         missing = [name for name in ["api_key", "username", "password"] if not getattr(self, name)]
-        if missing:
+        if missing and not self.demo_mode:
             raise SettingsLoadError(f"Missing required settings: {', '.join(missing)}")
         if not isinstance(self.epics, list):
             raise SettingsLoadError("epics must be a list of strings")
 
 
 def _coerce_types(data: Dict[str, Any]) -> Dict[str, Any]:
+    if "demo_mode" in data:
+        value = data["demo_mode"]
+        if isinstance(value, str):
+            data["demo_mode"] = value.strip().lower() in {"1", "true", "yes", "y", "on"}
+        else:
+            data["demo_mode"] = bool(value)
     if "polling_interval_seconds" in data:
         try:
             data["polling_interval_seconds"] = int(data["polling_interval_seconds"])
         except (TypeError, ValueError):
             raise SettingsLoadError("polling_interval_seconds must be an integer")
+    if "demo_price_seed" in data and data["demo_price_seed"] is not None:
+        try:
+            data["demo_price_seed"] = int(data["demo_price_seed"])
+        except (TypeError, ValueError):
+            raise SettingsLoadError("demo_price_seed must be an integer if provided")
+    if "demo_starting_balance" in data:
+        try:
+            data["demo_starting_balance"] = float(data["demo_starting_balance"])
+        except (TypeError, ValueError):
+            raise SettingsLoadError("demo_starting_balance must be numeric")
     if "epics" in data and isinstance(data["epics"], str):
         data["epics"] = [data["epics"]]
     return data
@@ -58,10 +77,11 @@ def _read_config_file(config_path: Path) -> Dict[str, Any]:
     raise ValueError(f"Unsupported config file format: {config_path.suffix}")
 
 
-def load_settings(config_path: Optional[str] = None) -> Settings:
-    """Load configuration from .env and optional YAML/TOML file.
+def load_settings(config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None) -> Settings:
+    """Load configuration from .env, optional YAML/TOML file, and CLI overrides.
 
-    Environment variables (prefixed with IG_) override file values.
+    Environment variables (prefixed with IG_) override file values. CLI overrides
+    (e.g., `{"demo_mode": True}`) are merged last.
     """
 
     load_dotenv(override=False)
@@ -79,8 +99,13 @@ def load_settings(config_path: Optional[str] = None) -> Settings:
         "polling_interval_seconds": os.getenv("IG_POLLING_INTERVAL_SECONDS"),
         "db_path": os.getenv("IG_DB_PATH"),
         "log_level": os.getenv("IG_LOG_LEVEL"),
+        "demo_mode": os.getenv("IG_DEMO_MODE"),
+        "demo_starting_balance": os.getenv("IG_DEMO_STARTING_BALANCE"),
+        "demo_price_seed": os.getenv("IG_DEMO_PRICE_SEED"),
     }
     merged = {**data, **{k: v for k, v in env_overrides.items() if v is not None}}
+    if cli_overrides:
+        merged.update({k: v for k, v in cli_overrides.items() if v is not None})
     merged = _coerce_types(merged)
 
     try:
